@@ -17,7 +17,7 @@ package object shapefile {
   class ShapefileParser extends ShapefileStructure with TypeMapper
 
   object Parser {
-    def apply(f: String)(implicit g: GeometryFactory) = new ShapefileParser().parse(f)(g)
+    def apply(f: String) = new ShapefileParser().parse(f)(new GeometryFactory())
   }
 
   trait TypeMapper {

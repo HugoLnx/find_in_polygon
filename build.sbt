@@ -1,5 +1,5 @@
 
-name := "Scala Shapefile Parser"
+name := "Find among MultiPolygons"
 
 scalaVersion := "2.10.0"
 
