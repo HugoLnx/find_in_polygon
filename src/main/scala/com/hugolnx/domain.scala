@@ -23,25 +23,29 @@ object ShapefileReader {
 }
 
 class CellsIndex(longSize : Int, latSize : Int, longMin : Double, latMin : Double) {
-	var index = new Array[Seq[Affiliate]](longSize*latSize)
+	var index : Map[Array[Int],Seq[Affiliate]] = Map()//new Array[Seq[Affiliate]](longSize*latSize)
 
 	def get(long: Double, lat: Double) : Seq[Affiliate] = {
-		val longGr = (CellsIndex.coordToInt(long) - CellsIndex.coordToInt(longMin)) / CellsIndex.CELL_SIZE
-		val latGr = (CellsIndex.coordToInt(lat) - CellsIndex.coordToInt(latMin)) / CellsIndex.CELL_SIZE
-		index(inxFor(longGr, latGr))
+		index(Array(longGr(long), latGr(lat)))
+		//index(inxFor(longGr(long), latGr(lat)))
 	}
 
+	def longGr(long:Double) = (CellsIndex.coordToInt(long) - CellsIndex.coordToInt(longMin)) / CellsIndex.CELL_SIZE
+	def latGr(lat:Double) = (CellsIndex.coordToInt(lat) - CellsIndex.coordToInt(latMin)) / CellsIndex.CELL_SIZE
+
 	def set(longGr : Int, latGr : Int, affiliates : Seq[Affiliate]) {
-		index(inxFor(longGr,latGr)) = affiliates
+		//index(inxFor(longGr,latGr)) = affiliates
+		index += (Array(longGr,latGr) -> affiliates)
 	}
 
 	def inxFor(longGr : Int, latGr : Int) : Int = longGr + latGr*longSize
 }
 
 object CellsIndex {
-	val CELL_SIZE = 100
+	val CELL_SIZE = 1000
 
-	def to(affiliates : Seq[Affiliate]) : CellsIndex = {
+	def to(all_affiliates : Seq[Affiliate]) : CellsIndex = {
+		var affiliates = all_affiliates
 		var longMin = 190.0
 		var longMax = -190.0
 		var latMin = 190.0
@@ -57,25 +61,43 @@ object CellsIndex {
 		val longSize = coordToInt(longMax) - coordToInt(longMin)
 		val latSize = coordToInt(latMax) - coordToInt(latMin)
 
-		val qntColumns = if(latSize % CELL_SIZE == 0) latSize / CELL_SIZE else latSize / CELL_SIZE + 1
-		val qntLines = if(longSize % CELL_SIZE == 0) longSize / CELL_SIZE else longSize / CELL_SIZE + 1
-		val index = new CellsIndex(qntLines, qntColumns, longMin, latMin)
+		val qntLongCells = if(longSize % CELL_SIZE == 0) longSize / CELL_SIZE else longSize / CELL_SIZE + 1
+		val qntLatCells = if(latSize % CELL_SIZE == 0) latSize / CELL_SIZE else latSize / CELL_SIZE + 1
+		println("longMin: " + longMin)
+		println("longMax: " + longMax)
+		println("latMin: " + latMin)
+		println("latMax: " + latMax)
+		println("longSize: " + longSize)
+		println("latSize: " + latSize)
+		println("longCells: " + qntLongCells)
+		println("latCells: " + qntLatCells)
+		val index = new CellsIndex(qntLongCells, qntLatCells, longMin, latMin)
 
-		for(latGr <- 0 until qntColumns) {
-			for(longGr <- 0 until qntLines) {
-				val localLongMin = longMin + longGr * CELL_SIZE / 1000.0
-				val localLongMax = localLongMin + (CELL_SIZE-1) / 1000.0
-				val localLatMin = latMin + latGr * CELL_SIZE    / 1000.0
-				val localLatMax = localLatMin + (CELL_SIZE-1)   / 1000.0
+		for(longGr <- 0 until qntLongCells) {
+			for(latGr <- 0 until qntLatCells) {
+				val localLongMin = (longMin      + ( longGr * CELL_SIZE )  / 1000.0)
+				val localLongMax = (localLongMin + ( (CELL_SIZE-1)      )  / 1000.0)
+				val localLatMin =  (latMin       + ( latGr * CELL_SIZE  )  / 1000.0)
+				val localLatMax =  (localLatMin  + ( (CELL_SIZE-1)      )  / 1000.0)
+
 				var cell = newPolygon(
-					Array(localLongMin, localLongMax),
-					Array(localLongMin, localLongMin),
-					Array(localLongMax, localLongMin),
-					Array(localLongMax, localLongMax)
+					Array(localLongMin, localLatMax),
+					Array(localLongMin, localLatMin),
+					Array(localLongMax, localLatMin),
+					Array(localLongMax, localLatMax)
 				)
 
-				val selectedAffiliates = affiliates.filter(affiliate => cell.intersects(affiliate.area))
-				index.set(latGr, longGr, selectedAffiliates)
+				val selectedAffiliates = affiliates.filter{affiliate =>
+					try {
+						cell.crosses(affiliate.area)
+					} catch {
+						case ex: TopologyException => {
+							//println("Crosses exception in Affiliate " + affiliate.id + " and cell " + cell)
+							true
+						}
+					}
+		    }
+				index.set(longGr, latGr, selectedAffiliates)
 			}
 		}
 		
